@@ -2,14 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/explain.js",
+      "src": "api/*.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/explain",
-      "dest": "/api/explain.js"
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     }
   ]
 }
