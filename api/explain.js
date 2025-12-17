@@ -1,11 +1,35 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// ✅ Force Node.js runtime (Gemini SDK requires this)
 export const config = {
   runtime: "nodejs",
 };
 
+// ✅ Prompt builder
+const buildPrompt = (input) => `
+Your job is to analyze the following code and return the answer ONLY in this structure:
+
+Summary:
+(A single clean sentence describing what this code does.)
+
+Breakdown:
+- Step 1
+- Step 2
+- Step 3
+
+Output:
+(Actual output OR "No output")
+
+Suggestions:
+- Suggestion 1
+- Suggestion 2
+
+Code:
+${input}
+`;
+
 export default async function handler(req) {
-  // CORS
+  // ✅ CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -17,12 +41,12 @@ export default async function handler(req) {
     });
   }
 
-  // Handle GET (important to avoid browser hang)
-  if (req.method === "GET") {
+  // ❌ Only POST allowed
+  if (req.method !== "POST") {
     return new Response(
-      JSON.stringify({ message: "POST { code } to this endpoint" }),
+      JSON.stringify({ error: "Only POST requests are allowed" }),
       {
-        status: 200,
+        status: 405,
         headers: {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "*",
@@ -31,33 +55,53 @@ export default async function handler(req) {
     );
   }
 
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
-  }
-
   try {
+    // 🔴 HARD CHECK: API key must exist
     if (!process.env.GEMINI_API_KEY) {
-      return new Response("Missing GEMINI_API_KEY", { status: 500 });
+      return new Response(
+        JSON.stringify({
+          error: "GEMINI_API_KEY missing in Production environment",
+        }),
+        {
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
     }
 
-    const { code } = await req.json();
+    // ✅ Parse body safely
+    const body = await req.json();
+    const { code } = body || {};
 
-    if (!code || typeof code !== "string") {
-      return new Response("Invalid code input", { status: 400 });
+    if (!code || typeof code !== "string" || code.trim() === "") {
+      return new Response(
+        JSON.stringify({ error: "Invalid or empty code input" }),
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
     }
 
+    // ✅ Gemini init
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash", // ✅ stable on Vercel
     });
 
-    // 🔥 SIMPLE PROMPT = FAST + RELIABLE
-    const result = await model.generateContent(
-      `Explain the following code clearly:\n\n${code}`
-    );
+    // ✅ Generate content
+    const result = await model.generateContent(buildPrompt(code));
 
+    // ✅ SAFE extraction (no silent empty response)
     const explanation =
-      result?.response?.text?.() || "No explanation generated.";
+      result?.response?.text?.() ||
+      "No explanation generated. Please try again.";
 
     return new Response(
       JSON.stringify({ explanation }),
@@ -69,9 +113,13 @@ export default async function handler(req) {
         },
       }
     );
-  } catch (err) {
+  } catch (error) {
+    // 🔴 Surface REAL error
     return new Response(
-      JSON.stringify({ error: err.message }),
+      JSON.stringify({
+        error: "Runtime error",
+        message: error.message,
+      }),
       {
         status: 500,
         headers: {
