@@ -1,6 +1,8 @@
 {
   "name": "codeclarity-backend",
   "version": "1.0.0",
-  "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
 }

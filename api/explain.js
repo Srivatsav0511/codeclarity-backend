@@ -1,7 +1,9 @@
-export const config = {
-  runtime: "nodejs",
-};
+import express from "express";
 
+const app = express();
+app.use(express.json());
+
+// 🔹 Prompt (unchanged)
 const buildPrompt = (input) => `
 Your job is to analyze the following code and return the answer ONLY in this structure:
 
@@ -24,26 +26,19 @@ Code:
 ${input}
 `;
 
-export default async function handler(req) {
-  if (req.method !== "POST") {
-    return new Response("POST only", { status: 405 });
-  }
-
-  if (!process.env.GROQ_API_KEY) {
-    return new Response("Missing GROQ_API_KEY", { status: 500 });
-  }
-
-  const { code } = await req.json();
-  if (!code) {
-    return new Response("No code provided", { status: 400 });
-  }
-
-  // ⏱ HARD TIMEOUT (prevents hanging)
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-
+// 🔹 API endpoint
+app.post("/api/explain", async (req, res) => {
   try {
-    const res = await fetch(
+    if (!process.env.GROQ_API_KEY) {
+      return res.status(500).json({ error: "Missing GROQ_API_KEY" });
+    }
+
+    const { code } = req.body;
+    if (!code) {
+      return res.status(400).json({ error: "No code provided" });
+    }
+
+    const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
@@ -52,39 +47,30 @@ export default async function handler(req) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama3-8b-8192",   // ⚠️ USE THIS MODEL (MOST STABLE)
-          messages: [
-            { role: "user", content: buildPrompt(code) }
-          ],
+          model: "llama3-8b-8192",
+          messages: [{ role: "user", content: buildPrompt(code) }],
           temperature: 0.2,
-          max_tokens: 400
+          max_tokens: 400,
         }),
-        signal: controller.signal,
       }
     );
 
-    clearTimeout(timeout);
+    const data = await response.json();
 
-    const data = await res.json();
-
-    return new Response(
-      JSON.stringify({
-        explanation:
-          data?.choices?.[0]?.message?.content || "No output"
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    res.json({
+      explanation:
+        data?.choices?.[0]?.message?.content || "No output generated",
+    });
   } catch (err) {
-    return new Response(
-      JSON.stringify({
-        error: "Groq request failed",
-        message: err.name === "AbortError"
-          ? "Groq timed out"
-          : err.message,
-      }),
-      { status: 500 }
-    );
+    res.status(500).json({
+      error: "Backend error",
+      message: err.message,
+    });
   }
-}
+});
+
+// 🔹 START SERVER (THIS IS THE IMPORTANT PART)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
+});
