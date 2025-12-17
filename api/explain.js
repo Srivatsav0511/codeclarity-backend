@@ -25,7 +25,6 @@ ${input}
 `;
 
 export default async function handler(req) {
-  // CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -35,20 +34,6 @@ export default async function handler(req) {
         "Access-Control-Allow-Headers": "Content-Type",
       },
     });
-  }
-
-  // GET fallback
-  if (req.method === "GET") {
-    return new Response(
-      JSON.stringify({ message: "POST { code } to this endpoint" }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
-    );
   }
 
   if (req.method !== "POST") {
@@ -65,24 +50,33 @@ export default async function handler(req) {
       return new Response("No code provided", { status: 400 });
     }
 
-    const response = await fetch(
+    // 🔥 HARD TIMEOUT (CRITICAL)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000); // 8 seconds
+
+    const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           contents: [
             {
               parts: [{ text: buildPrompt(code) }],
             },
           ],
+          generationConfig: {
+            maxOutputTokens: 300, // 🔥 force fast response
+            temperature: 0.2,
+          },
         }),
       }
     );
 
-    const data = await response.json();
+    clearTimeout(timeout);
+
+    const data = await res.json();
 
     const explanation =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
@@ -101,8 +95,11 @@ export default async function handler(req) {
   } catch (err) {
     return new Response(
       JSON.stringify({
-        error: "Backend error",
-        message: err.message,
+        error: "Gemini request failed",
+        message:
+          err.name === "AbortError"
+            ? "Gemini request timed out"
+            : err.message,
       }),
       {
         status: 500,
