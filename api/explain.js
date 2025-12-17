@@ -1,11 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-// ✅ Force Node.js runtime (Gemini SDK requires this)
 export const config = {
   runtime: "nodejs",
 };
 
-// ✅ Prompt builder
 const buildPrompt = (input) => `
 Your job is to analyze the following code and return the answer ONLY in this structure:
 
@@ -29,7 +25,7 @@ ${input}
 `;
 
 export default async function handler(req) {
-  // ✅ CORS preflight
+  // CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -41,12 +37,12 @@ export default async function handler(req) {
     });
   }
 
-  // ❌ Only POST allowed
-  if (req.method !== "POST") {
+  // GET fallback
+  if (req.method === "GET") {
     return new Response(
-      JSON.stringify({ error: "Only POST requests are allowed" }),
+      JSON.stringify({ message: "POST { code } to this endpoint" }),
       {
-        status: 405,
+        status: 200,
         headers: {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "*",
@@ -55,53 +51,42 @@ export default async function handler(req) {
     );
   }
 
+  if (req.method !== "POST") {
+    return new Response("POST only", { status: 405 });
+  }
+
   try {
-    // 🔴 HARD CHECK: API key must exist
     if (!process.env.GEMINI_API_KEY) {
-      return new Response(
-        JSON.stringify({
-          error: "GEMINI_API_KEY missing in Production environment",
+      return new Response("Missing GEMINI_API_KEY", { status: 500 });
+    }
+
+    const { code } = await req.json();
+    if (!code) {
+      return new Response("No code provided", { status: 400 });
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: buildPrompt(code) }],
+            },
+          ],
         }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
-    }
+      }
+    );
 
-    // ✅ Parse body safely
-    const body = await req.json();
-    const { code } = body || {};
+    const data = await response.json();
 
-    if (!code || typeof code !== "string" || code.trim() === "") {
-      return new Response(
-        JSON.stringify({ error: "Invalid or empty code input" }),
-        {
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
-    }
-
-    // ✅ Gemini init
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash", // ✅ stable on Vercel
-    });
-
-    // ✅ Generate content
-    const result = await model.generateContent(buildPrompt(code));
-
-    // ✅ SAFE extraction (no silent empty response)
     const explanation =
-      result?.response?.text?.() ||
-      "No explanation generated. Please try again.";
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "No explanation generated.";
 
     return new Response(
       JSON.stringify({ explanation }),
@@ -113,12 +98,11 @@ export default async function handler(req) {
         },
       }
     );
-  } catch (error) {
-    // 🔴 Surface REAL error
+  } catch (err) {
     return new Response(
       JSON.stringify({
-        error: "Runtime error",
-        message: error.message,
+        error: "Backend error",
+        message: err.message,
       }),
       {
         status: 500,
