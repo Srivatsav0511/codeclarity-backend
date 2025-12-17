@@ -25,6 +25,7 @@ ${input}
 `;
 
 export default async function handler(req) {
+  // CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -41,45 +42,39 @@ export default async function handler(req) {
   }
 
   try {
-    if (!process.env.GEMINI_API_KEY) {
-      return new Response("Missing GEMINI_API_KEY", { status: 500 });
+    if (!process.env.GROQ_API_KEY) {
+      return new Response("Missing GROQ_API_KEY", { status: 500 });
     }
 
     const { code } = await req.json();
+
     if (!code) {
       return new Response("No code provided", { status: 400 });
     }
 
-    // 🔥 HARD TIMEOUT (CRITICAL)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000); // 8 seconds
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: buildPrompt(code) }],
-            },
-          ],
-          generationConfig: {
-            maxOutputTokens: 300, // 🔥 force fast response
-            temperature: 0.2,
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "llama3-70b-8192",
+        messages: [
+          {
+            role: "user",
+            content: buildPrompt(code),
           },
-        }),
-      }
-    );
-
-    clearTimeout(timeout);
+        ],
+        temperature: 0.2,
+        max_tokens: 500
+      }),
+    });
 
     const data = await res.json();
 
     const explanation =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      data?.choices?.[0]?.message?.content ||
       "No explanation generated.";
 
     return new Response(
@@ -95,11 +90,8 @@ export default async function handler(req) {
   } catch (err) {
     return new Response(
       JSON.stringify({
-        error: "Gemini request failed",
-        message:
-          err.name === "AbortError"
-            ? "Gemini request timed out"
-            : err.message,
+        error: "Backend error",
+        message: err.message,
       }),
       {
         status: 500,
