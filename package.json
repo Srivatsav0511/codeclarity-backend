@@ -3,14 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Serverless backend for CodeClarity using Gemini API",
-  "scripts": {
-    "dev": "node api/explain.js"
-  },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0"
-  },
-  "engines": {
-    "node": ">=18"
+    "@google/generative-ai": "0.21.0"
   }
 }
