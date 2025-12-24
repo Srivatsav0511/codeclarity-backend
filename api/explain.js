@@ -1,9 +1,21 @@
 import express from "express";
 
 const app = express();
+
+// 🔹 Fix CORS - Add this BEFORE other middleware
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json());
 
-// 🔹 Test endpoint to check if API key is loaded
+// 🔹 Test endpoint
 app.get("/api/test", (req, res) => {
   res.json({ 
     status: "Backend is working",
