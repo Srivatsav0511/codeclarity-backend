@@ -68,7 +68,6 @@ app.post("/api/explain", async (req, res) => {
 
     const data = await response.json();
 
-    // Handle error responses
     if (data.error) {
       return res.status(500).json({ 
         error: "Gemini API Error", 
