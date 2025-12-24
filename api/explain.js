@@ -3,6 +3,15 @@ import express from "express";
 const app = express();
 app.use(express.json());
 
+// 🔹 Test endpoint to check if API key is loaded
+app.get("/api/test", (req, res) => {
+  res.json({ 
+    status: "Backend is working",
+    hasApiKey: !!process.env.GEMINI_API_KEY,
+    apiKeyPreview: process.env.GEMINI_API_KEY ? `${process.env.GEMINI_API_KEY.slice(0, 10)}...` : "Not found"
+  });
+});
+
 const buildPrompt = (input) => `
 Your job is to analyze the following code and return the answer ONLY in this structure:
 
@@ -59,14 +68,11 @@ app.post("/api/explain", async (req, res) => {
 
     const data = await response.json();
 
-    // Log the full response for debugging
-    console.log("Gemini API Response:", JSON.stringify(data, null, 2));
-
     // Handle error responses
     if (data.error) {
       return res.status(500).json({ 
         error: "Gemini API Error", 
-        details: data.error 
+        details: data.error.message 
       });
     }
 
@@ -75,7 +81,6 @@ app.post("/api/explain", async (req, res) => {
         data?.candidates?.[0]?.content?.parts?.[0]?.text || "No output generated",
     });
   } catch (err) {
-    console.error("Backend error:", err);
     res.status(500).json({
       error: "Backend error",
       message: err.message,
