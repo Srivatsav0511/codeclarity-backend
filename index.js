@@ -55,8 +55,9 @@ app.post("/api/explain", async (req, res) => {
       return res.status(400).json({ error: "No code provided" });
     }
 
-   const response = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`,
+   // index.js - update the fetch URL
+const response = await fetch(
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
   {
     method: "POST",
     headers: {
@@ -75,6 +76,7 @@ app.post("/api/explain", async (req, res) => {
     }),
   }
 );
+
 
 
 
