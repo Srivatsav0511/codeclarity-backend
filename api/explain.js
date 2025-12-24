@@ -3,7 +3,6 @@ import express from "express";
 const app = express();
 app.use(express.json());
 
-// 🔹 Prompt (unchanged)
 const buildPrompt = (input) => `
 Your job is to analyze the following code and return the answer ONLY in this structure:
 
@@ -26,11 +25,10 @@ Code:
 ${input}
 `;
 
-// 🔹 API endpoint
 app.post("/api/explain", async (req, res) => {
   try {
-    if (!process.env.GROQ_API_KEY) {
-      return res.status(500).json({ error: "Missing GROQ_API_KEY" });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
     }
 
     const { code } = req.body;
@@ -39,18 +37,22 @@ app.post("/api/explain", async (req, res) => {
     }
 
     const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama3-8b-8192",
-          messages: [{ role: "user", content: buildPrompt(code) }],
-          temperature: 0.2,
-          max_tokens: 400,
+          contents: [
+            {
+              parts: [
+                {
+                  text: buildPrompt(code),
+                },
+              ],
+            },
+          ],
         }),
       }
     );
@@ -59,7 +61,7 @@ app.post("/api/explain", async (req, res) => {
 
     res.json({
       explanation:
-        data?.choices?.[0]?.message?.content || "No output generated",
+        data?.candidates?.[0]?.content?.parts?.[0]?.text || "No output generated",
     });
   } catch (err) {
     res.status(500).json({
@@ -69,8 +71,4 @@ app.post("/api/explain", async (req, res) => {
   }
 });
 
-// 🔹 START SERVER (THIS IS THE IMPORTANT PART)
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
-});
+export default app;
