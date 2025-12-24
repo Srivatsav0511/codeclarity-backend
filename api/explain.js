@@ -37,7 +37,7 @@ app.post("/api/explain", async (req, res) => {
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -59,11 +59,23 @@ app.post("/api/explain", async (req, res) => {
 
     const data = await response.json();
 
+    // Log the full response for debugging
+    console.log("Gemini API Response:", JSON.stringify(data, null, 2));
+
+    // Handle error responses
+    if (data.error) {
+      return res.status(500).json({ 
+        error: "Gemini API Error", 
+        details: data.error 
+      });
+    }
+
     res.json({
       explanation:
         data?.candidates?.[0]?.content?.parts?.[0]?.text || "No output generated",
     });
   } catch (err) {
+    console.error("Backend error:", err);
     res.status(500).json({
       error: "Backend error",
       message: err.message,
